@@ -7,6 +7,7 @@ namespace GoogleARCore.FarmAR
 {
     using System;
     using System.Collections.Generic;
+    using System.Reflection;
     using GoogleARCore;
     using UnityEngine;
     using UnityEngine.Rendering;
@@ -45,6 +46,8 @@ namespace GoogleARCore.FarmAR
 
         public GameObject TileUI;
 
+        public GameObject EscapeUI;
+
         /// <summary>
         /// A list to hold new planes ARCore began tracking in the current frame. This object is used across
         /// the application to avoid per-frame allocations.
@@ -63,10 +66,15 @@ namespace GoogleARCore.FarmAR
         private bool m_IsQuitting = false;
 
         /// <summary>
+        /// A list of the active tiles
+        /// </summary>
+        private GameObject[] activeTiles;
+
+        /// <summary>
         /// Dictionary of key: names, values: game model paths
         /// </summary>
-        private Dictionary<string, string> tileModels = new Dictionary<string, string>();
-        
+        private Dictionary<string, string> tileModels;
+
 
         private bool farmCreated = false;
 
@@ -82,46 +90,19 @@ namespace GoogleARCore.FarmAR
         private float newDistance;
         private const string modelPath = "FarmAR Assets/Prefabs/";
 
-        /// <summary>
-        /// Swaps prefabs for game object
-        /// Copies components and properties
-        /// </summary>
-        public void Swap(GameObject tile, string swapToTile)
-        {
-           string value = "";
-           if (tileModels.TryGetValue(swapToTile, out value)){
-                GameObject newTile = (GameObject)Instantiate(Resources.Load(value));
-                var components = tile.GetComponents<Component>();
-                //foreach(Component comp in components)
-                //{
-                //    Type t = comp.GetType();
-                //    var properties = t.GetProperties();
-                //    newTile.AddComponent(t);
-                //    foreach(var prop in properties)
-                //    {
-                //        prop.SetValue(newTile.GetComponent(t), prop.GetValue(comp, null), null);
-                //    }
 
-                //}
-                newTile.transform.parent = tile.transform.parent;
-                newTile.transform.localPosition = tile.transform.localPosition;
-                newTile.transform.localRotation = tile.transform.localRotation;
-                newTile.transform.localScale = tile.transform.localScale;
-                DestroyImmediate(tile);
-                tile = newTile;
-            }
-            
-        }
 
         public void Start()
         {
+
+            tileModels = new Dictionary<string, string>();
             tileModels.Add("Seeds", modelPath + "model");
             tileModels.Add("Flowers", modelPath + "model 1");
             tileModels.Add("Grass", modelPath + "model 2");
             tileModels.Add("Empty", modelPath + "model 3");
             tileModels.Add("Pineapple", modelPath + "model 4");
             tileModels.Add("Carrots", modelPath + "model 5");
-
+            activeTiles = GameObject.FindGameObjectsWithTag("Tile");
         }
         /// <summary>
         /// The Unity Update() method.
@@ -167,8 +148,10 @@ namespace GoogleARCore.FarmAR
             bool showSearchingUI = true;
             bool showPlaceFarmUI = false;
             bool showTileUI = false;
+            bool showEscapeUI = false;
             if (selectedTile != null)
             {
+                showEscapeUI = true;
                 showTileUI = true;
             }
             for (int i = 0; i < m_AllPlanes.Count; i++)
@@ -188,6 +171,7 @@ namespace GoogleARCore.FarmAR
             PlaceFarmUI.SetActive(showPlaceFarmUI);
             SearchingForPlaneUI.SetActive(showSearchingUI);
             TileUI.SetActive(showTileUI);
+            EscapeUI.SetActive(showEscapeUI);
 
             // If the player has not touched the screen, we are done with this update.
             Touch touch;
@@ -257,45 +241,194 @@ namespace GoogleARCore.FarmAR
                 Button harvesttButton = buttonList[0];
                 Button waterButton = buttonList[1];
                 Button plantButton = buttonList[2];
-                String prefabToSwap = "Flowers";
-
-                plantButton.onClick.AddListener(() => {Swap(selectedTile, prefabToSwap); });
+                string prefabToSwap = "Flowers";
 
 
+                plantButton.onClick.AddListener(() => { Swap(selectedTile, prefabToSwap); });
             }
 
-           
+            if (EscapeUI.activeSelf)
+            {
+                Button[] buttonList = EscapeUI.GetComponentsInChildren<Button>();
+                Button escapeButton = buttonList[0];
 
-        //    //Scale Farm by pinching
-        //    if (Input.touchCount == 2 && farmCreated)
-        //    {
-        //        if (Input.touchCount >= 2 && (Input.GetTouch(0).phase == TouchPhase.Moved || Input.GetTouch(1).phase == TouchPhase.Moved))
-        //        {
-        //            Vector2 touch1 = Input.GetTouch(0).position;
-        //            Vector2 touch2 = Input.GetTouch(1).position;
-
-        //            newDistance = (touch1 - touch2).sqrMagnitude;
-        //            float changeInDistance = newDistance - initialDistance;
-        //            float percentageChange = changeInDistance / initialDistance;
+                escapeButton.onClick.AddListener(() => {
+                    mSelected.color = mOriginal.color;
+                    selectedTile = null;
+                });
+            }
 
 
-        //            Vector3 newScale = farmObject.transform.localScale;
-        //            newScale += percentageChange * newScale;
 
-        //            farmObject.transform.localScale = newScale;
 
-        //        }
 
-        //    }
+
+
+            //    //Scale Farm by pinching
+            //    if (Input.touchCount == 2 && farmCreated)
+            //    {
+            //        if (Input.touchCount >= 2 && (Input.GetTouch(0).phase == TouchPhase.Moved || Input.GetTouch(1).phase == TouchPhase.Moved))
+            //        {
+            //            Vector2 touch1 = Input.GetTouch(0).position;
+            //            Vector2 touch2 = Input.GetTouch(1).position;
+
+            //            newDistance = (touch1 - touch2).sqrMagnitude;
+            //            float changeInDistance = newDistance - initialDistance;
+            //            float percentageChange = changeInDistance / initialDistance;
+
+
+            //            Vector3 newScale = farmObject.transform.localScale;
+            //            newScale += percentageChange * newScale;
+
+            //            farmObject.transform.localScale = newScale;
+
+            //        }
+
+            //    }
+        }
+
+        /// <summary>
+        /// Swaps prefabs for game object
+        /// Copies components and properties
+        /// </summary>
+        public void Swap(GameObject tile, string swapToTile)
+        {
+            string value;
+
+            if (tileModels.TryGetValue(swapToTile, out value))
+            {
+                //make new tile, copy components of old tile
+                GameObject newTile = (GameObject)Instantiate(Resources.Load(value));
+                newTile.AddComponent<BoxCollider>();
+                GetCopyOf(tile.GetComponent<BoxCollider>(), newTile.GetComponent<BoxCollider>(), tile.GetComponent<BoxCollider>().GetType());
+                //newTile.AddComponent<MeshRenderer>();
+                //GetCopyOf(tile.GetComponent<MeshRenderer>(), newTile.GetComponent<MeshRenderer>(), tile.GetComponent<MeshRenderer>().GetType());
+                newTile.AddComponent<TileState>();
+                GetCopyOf(tile.GetComponent<TileState>(), newTile.GetComponent<TileState>(), tile.GetComponent<TileState>().GetType());
+                //newTile.AddComponent<Renderer>();
+                //GetCopyOf(tile.GetComponent<Renderer>(), newTile.GetComponent<Renderer>(), tile.GetComponent<Renderer>().GetType());
+                
+
+                //current version
+                /*GameObject newTile = (GameObject)Instantiate(Resources.Load(value));
+
+                var components = tile.GetComponents<Component>();
+                string comps = "";
+                foreach (Component comp in components)
+                {
+                    Type t = comp.GetType();
+                    var properties = t.GetProperties();
+                    newTile.AddComponent(t);
+                    var newComp = newTile.GetComponent(t);
+                    GetCopyOf(comp, newComp, t);
+                    comps += comp.ToString();
+                }
+                _ShowAndroidToastMessage(comps); */
+                newTile.transform.parent = tile.transform.parent;
+                newTile.transform.localPosition = tile.transform.localPosition;
+                newTile.transform.localRotation = tile.transform.localRotation;
+                newTile.transform.localScale = tile.transform.localScale;
+                DestroyImmediate(tile);
+                tile = newTile;
+            }
+
+        }
+
+        private void copyNestedComp(Component origComp, Component copyComp, Type t)
+        {
+            var components = origComp.GetComponents<Component>();
+            var copyComponents = copyComp.GetComponents<Component>();
+            int length = components.Length;
+            int newLength = copyComponents.Length;
+            if (length != newLength)
+            {
+                return;
+            }
+            if (length <= 0)
+            {
+                GetCopyOf(origComp, copyComp, t);
+                return;
+            }
+            else
+            {
+                for (int i = 0; i < length; i++)
+                {
+                    Component comp = components.GetValue(i) as Component;
+                    Component newComp = copyComponents.GetValue(i) as Component;
+                    Type type = comp.GetType();
+                    var properties = t.GetProperties();
+                    copyNestedComp(comp, newComp, type);
+                }
+                GetCopyOf(origComp, copyComp, t);
+            }
+        }
+
+        private static void GetCopyOf(Component comp, Component newComp, Type other)
+        {
+            Type type = comp.GetType();
+            if (type != other.GetType()) return; // type mis-match
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
+            PropertyInfo[] pinfos = type.GetProperties(flags);
+            foreach (var pinfo in pinfos)
+            {
+                if (pinfo.CanWrite)
+                {
+                    try
+                    {
+                        pinfo.SetValue(comp, pinfo.GetValue(other, null), null);
+                    }
+                    catch { } // In case of NotImplementedException being thrown. For some reason specifying that exception didn't seem to catch it, so I didn't catch anything specific.
+                }
+            }
+            FieldInfo[] finfos = type.GetFields(flags);
+            foreach (var finfo in finfos)
+            {
+                finfo.SetValue(comp, finfo.GetValue(other));
+            }
+            newComp = comp;
+        }
+
+        private void CheckWaterLevel()
+        {
+            GameObject[] witheredTiles = GameObject.FindGameObjectsWithTag(modelPath + "model 3");
+
+            //search for objects that are watered but still have withered prefab
+            foreach (GameObject other in activeTiles)
+            {
+                if (other.GetComponent<TileState>().IsWatered)
+                {
+                    Swap(other, "Pineapple");
+
+                }
+            }
+
+            //find withered but don't have prefab
+            foreach (GameObject tile in activeTiles)
+            {
+                if (!tile.GetComponent<TileState>().IsWatered)
+                {
+                    bool change = true;
+                    foreach (GameObject other in witheredTiles)
+                    {
+                        if (other.Equals(tile))
+                        {
+                            change = false;
+                        }
+                    }
+                    if (change)
+                    {
+                        Swap(tile, "Empty");
+                    }
+                }
+            }
+
         }
 
 
-
-
-            /// <summary>
-            /// Quit the application if there was a connection error for the ARCore session.
-            /// </summary>
-            private void _QuitOnConnectionErrors()
+        /// <summary>
+        /// Quit the application if there was a connection error for the ARCore session.
+        /// </summary>
+        private void _QuitOnConnectionErrors()
         {
             if (m_IsQuitting)
             {

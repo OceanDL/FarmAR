@@ -53,6 +53,14 @@
   <ItemGroup>
      <Compile Include="Assets\GoogleARCore\SDK\Scripts\Editor\ARCoreRequiredMenuItem.cs" />
      <Compile Include="Assets\GoogleARCore\SDK\Scripts\Editor\BuildHelper.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\CraftSystemEditor.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\EquipmentSystemEditor.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\HotbarEditor.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\IM_Manager.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\InventoryDesignEditor.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\InventoryEditor.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\StorageInventoryEditor.cs" />
+     <Compile Include="Assets\InventoryMaster\Editor\TooltipEditor.cs" />
  <Reference Include="Facebook.Unity.Settings">
  <HintPath>C:/Users/Seac/Documents/FarmAR/Library/FacebookSDK/Facebook.Unity.Settings.dll</HintPath>
  </Reference>

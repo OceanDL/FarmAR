@@ -4,35 +4,55 @@ using UnityEngine;
 
 public class TileState : MonoBehaviour
 {
-    private bool watered, empty;
-    private System.DateTime wateredLast;
-    private System.TimeSpan waterBound = new System.TimeSpan(0, 0, 5);
+    private int plantStage, plantType;
+    private int currentPlantModel;
+    private bool watered, hasPlant;
+    private System.DateTime wateredLast, plantedLast;
+    private static System.TimeSpan waterBound = new System.TimeSpan(0, 0, 50);
+    private static System.TimeSpan sproutDuration = new System.TimeSpan(0, 0, 10);
+    private static System.TimeSpan midlingDuration = new System.TimeSpan(0, 0, 20);
 
     // Use this for initialization
     void Start()
     {
-        empty = false;
-        watered = true;
-        Water();
+        
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (!IsEmpty)
+        if (HasPlant)
         {
-            //_ShowAndroidToastMessage("Plant just withered");
-            if (LastWatered().CompareTo(waterBound) > 0 && IsWatered)
+            this.UpdatePlantStage();
+            if (DeltaLastWatered().CompareTo(waterBound) >= 0 && IsWatered)
             {
+                this.IsWatered = false;
                 //_ShowAndroidToastMessage("Plant just withered");
-                IsWatered = false;
             }
-            else if (LastWatered().CompareTo(waterBound) < 0 && !IsWatered)
+            else if (DeltaLastWatered().CompareTo(waterBound) < 0 && !IsWatered)
             {
-                
                 IsWatered = true;
-            }
+            } 
         }
+        if (UpdatePlantStage().CompareTo(sproutDuration) >= 0 && UpdatePlantStage().CompareTo(midlingDuration) < 0)
+        {
+            PlantStage = 1;
+            //_ShowAndroidToastMessage("stage: " + PlantStage);
+        }
+        else if (UpdatePlantStage().CompareTo(midlingDuration) >= 0)
+        {
+            PlantStage = 2;
+        }
+    }
+
+    public TileState(int currentPlantModel, int plantType, bool watered, bool hasPlant, System.DateTime wateredLast, System.DateTime plantedLast)
+    {
+        this.currentPlantModel = currentPlantModel;
+        this.plantType = plantType;
+        this.watered = watered;
+        this.hasPlant = hasPlant;
+        this.wateredLast = wateredLast;
+        this.plantedLast = plantedLast;
     }
 
     //Property that checks if tile is watered
@@ -42,28 +62,90 @@ public class TileState : MonoBehaviour
         set { watered = value; }
     }
 
-    //Property that checks if tile is watered
-    public bool IsEmpty
+    //property to check if a tile is holding a plant
+    public bool HasPlant
     {
-        get { return empty; }
-        set { empty = value; }
+        get { return hasPlant; }
+        set { hasPlant = value; }
+    }
+
+    //property that contains the name of the model of the plant stored in the tile
+    public int PlantModel
+    {
+        get { return currentPlantModel; }
+        set { currentPlantModel = value; }
+    }
+
+    //plant model != plant type all the time
+    //this is because of the sproutling and midling phases
+    //plant type is the type of seed planted
+    public int PlantType
+    {
+        get { return plantType; }
+        set { plantType = value; }
+    }
+
+    //property indicating plant stage
+    // 0->seed/sprout; 1->midling; 2->full-grown plant
+    public int PlantStage
+    {
+        get { return plantStage; }
+        set { plantStage = value; }
+    }
+
+    //Just needed for saving time progress
+    public System.DateTime WateredLast
+    {
+        get { return wateredLast;  }
+        set { wateredLast = value;  }
+    }
+
+    //Also needed for saving time progress
+    public System.DateTime PlantedLast
+    {
+        get { return plantedLast; }
+        set { plantedLast = value; }
+    }
+
+    //removes plant from the tile
+    public void Harvest()
+    {
+        this.HasPlant = false;
+        this.IsWatered = false;
+        this.PlantStage = 0;
+    }
+
+    //method to plant something
+    public void PutPlant(int typeToPlant, int modelInTile)
+    {
+        plantedLast = System.DateTime.Now.ToUniversalTime();
+        this.currentPlantModel = modelInTile;
+        this.plantType = typeToPlant;
+        this.HasPlant = true;
+        plantStage = 0;
+        this.Water();
     }
 
     //method to change tile to watered state
     public void Water()
     {
         wateredLast = System.DateTime.Now.ToUniversalTime();
-        if (!IsWatered)
+        if (!this.IsWatered)
         {
-            IsWatered = true;
-            //swap watered tile
+            this.IsWatered = true;
         }
 
     }
 
-    private System.TimeSpan LastWatered()
+    private System.TimeSpan UpdatePlantStage()
     {
-        return System.DateTime.Now.ToUniversalTime().Subtract();
+        return System.DateTime.Now.ToUniversalTime().Subtract(plantedLast);
+    }
+
+    //returns the difference between the time last watered and the current time
+    private System.TimeSpan DeltaLastWatered()
+    {
+        return System.DateTime.Now.ToUniversalTime().Subtract(wateredLast);
     }
 
     /// <summary>

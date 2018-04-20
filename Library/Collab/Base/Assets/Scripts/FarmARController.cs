@@ -46,6 +46,15 @@ namespace GoogleARCore.FarmAR
 
         public GameObject TileUI;
 
+        public GameObject EscapeUI;
+
+        public GameObject InventoryUI;
+
+        public GameObject CurrencyUI;
+
+        public GameObject CurrencyImage;
+
+
         /// <summary>
         /// A list to hold new planes ARCore began tracking in the current frame. This object is used across
         /// the application to avoid per-frame allocations.
@@ -64,9 +73,19 @@ namespace GoogleARCore.FarmAR
         private bool m_IsQuitting = false;
 
         /// <summary>
-        /// Dictionary of key: names, values: game model paths
+        /// A list of the active tiles
         /// </summary>
-        private Dictionary<string, string> tileModels = new Dictionary<string, string>();
+        private GameObject[] activeTiles;
+
+        /// <summary>
+        /// Dictionary of key: names, values: game model paths
+        /// 0-> grass, 1-> flowers, 2-> carrots, 3-> pineapple, 4-> seeds, 5-> empty, 6-> wither, 7-> midling
+        /// </summary>
+        private Dictionary<int, string> tileModels;
+
+        private Dictionary<int, int> plantValues;
+
+        private Dictionary<int, int> seedValues;
 
 
         private bool farmCreated = false;
@@ -82,69 +101,64 @@ namespace GoogleARCore.FarmAR
         private float initialDistance;
         private float newDistance;
         private const string modelPath = "FarmAR Assets/Prefabs/";
+        private int currency;
 
-        /// <summary>
-        /// Swaps prefabs for game object
-        /// Copies components and properties
-        /// </summary>
-        public void Swap(GameObject tile, string swapToTile)
-        {
-            string value = "";
-            if (tileModels.TryGetValue(swapToTile, out value))
-            {
-                GameObject newTile = (GameObject)Instantiate(Resources.Load(value));
-                var components = tile.GetComponents<Component>();
-                foreach(Component comp in components)
-                {
-                    Type t = comp.GetType();
-                    var properties = t.GetProperties();
-                    newTile.AddComponent(t);
-                    var newComp = newTile.GetComponent(t);
-                    GetCopyOf(comp, t, newComp);
-                }
-                newTile.transform.parent = tile.transform.parent;
-                newTile.transform.localPosition = tile.transform.localPosition;
-                newTile.transform.localRotation = tile.transform.localRotation;
-                newTile.transform.localScale = tile.transform.localScale;
-                DestroyImmediate(tile);
-                tile = newTile;
-            }
 
-        }
-
-        public void GetCopyOf(Component comp, Type other, Component newComp)
-        {
-            Type type = comp.GetType();
-            if (type != other.GetType()) return; // type mis-match
-            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
-            PropertyInfo[] pinfos = type.GetProperties(flags);
-            foreach (var pinfo in pinfos)
-            {
-                if (pinfo.CanWrite)
-                {
-                    try
-                    {
-                        pinfo.SetValue(comp, pinfo.GetValue(other, null), null);
-                    }
-                    catch { } // In case of NotImplementedException being thrown. For some reason specifying that exception didn't seem to catch it, so I didn't catch anything specific.
-                }
-            }
-            FieldInfo[] finfos = type.GetFields(flags);
-            foreach (var finfo in finfos)
-            {
-                finfo.SetValue(comp, finfo.GetValue(other));
-            }
-            newComp = comp;
-        }
 
         public void Start()
         {
-            tileModels.Add("Seeds", modelPath + "model");
-            tileModels.Add("Flowers", modelPath + "model 1");
-            tileModels.Add("Grass", modelPath + "model 2");
-            tileModels.Add("Empty", modelPath + "model 3");
-            tileModels.Add("Pineapple", modelPath + "model 4");
-            tileModels.Add("Carrots", modelPath + "model 5");
+            /// <summary>
+            /// Dictionary of key: names, values: game model paths
+            /// 0-> grass, 1-> flowers, 2-> carrots, 3-> pineapple, 4-> seeds, 5-> empty, 6-> wither, 7-> midling
+            /// </summary>
+            tileModels = new Dictionary<int, string>();
+            tileModels.Add(4, modelPath + "model");
+            tileModels.Add(1, modelPath + "model 1");
+            tileModels.Add(0, modelPath + "model 2");
+            tileModels.Add(5, modelPath + "model 3");
+            tileModels.Add(3, modelPath + "model 4");
+            tileModels.Add(2, modelPath + "model 5");
+            tileModels.Add(6, modelPath + "model 6");
+            tileModels.Add(7, modelPath + "model 7");
+
+            plantValues = new Dictionary<int, int>();
+            plantValues.Add(0, 2);
+            plantValues.Add(1, 4);
+            plantValues.Add(3, 10);
+            plantValues.Add(2, 6);
+            plantValues.Add(6, 0);
+
+            seedValues = new Dictionary<int, int>();
+            seedValues.Add(0, 1);
+            seedValues.Add(1, 2);
+            seedValues.Add(2, 3);
+            seedValues.Add(3, 4);
+
+            activeTiles = GameObject.FindGameObjectsWithTag("Tile");
+
+
+            if (PlayerPrefs.GetInt("Currency", -1) == -1)
+            {
+                PlayerPrefs.SetInt("Currency", 500);
+                currency = 500;
+            }
+            else
+            {
+                currency = PlayerPrefs.GetInt("Currency");
+            }
+
+            currency = 500000;
+
+            Text currencyValue = CurrencyImage.GetComponentInChildren<Text>();
+            currencyValue.text = currency.ToString();
+            _ShowAndroidToastMessage(currency.ToString());
+            bool farmSaved = false;
+            if (PlayerPrefs.GetInt("farmSaved") == 1)
+            {
+                farmSaved = true;
+            }
+            ReloadFarm(farmSaved);
+
 
         }
         /// <summary>
@@ -152,6 +166,10 @@ namespace GoogleARCore.FarmAR
         /// </summary>
         public void Update()
         {
+
+
+
+
             if (Input.GetKey(KeyCode.Escape))
             {
                 Application.Quit();
@@ -191,9 +209,13 @@ namespace GoogleARCore.FarmAR
             bool showSearchingUI = true;
             bool showPlaceFarmUI = false;
             bool showTileUI = false;
+            bool showEscapeUI = false;
+            bool showCurrencyUI = false;
             if (selectedTile != null)
             {
+                showEscapeUI = true;
                 showTileUI = true;
+                showCurrencyUI = true;
             }
             for (int i = 0; i < m_AllPlanes.Count; i++)
             {
@@ -212,6 +234,10 @@ namespace GoogleARCore.FarmAR
             PlaceFarmUI.SetActive(showPlaceFarmUI);
             SearchingForPlaneUI.SetActive(showSearchingUI);
             TileUI.SetActive(showTileUI);
+            EscapeUI.SetActive(showEscapeUI);
+            CurrencyUI.SetActive(showCurrencyUI);
+
+
 
             // If the player has not touched the screen, we are done with this update.
             Touch touch;
@@ -235,23 +261,14 @@ namespace GoogleARCore.FarmAR
                 // world evolves.
                 var anchor = hit.Trackable.CreateAnchor(hit.Pose);
 
-                //Pretty sure we don't need this. Probably. 
-                //// Andy should look at the camera but still be flush with the plane.
-                //if ((hit.Flags & TrackableHitFlags.PlaneWithinPolygon) != TrackableHitFlags.None)
-                //{
-                //    // Get the camera position and match the y-component with the hit position.
-                //    Vector3 cameraPositionSameY = FirstPersonCamera.transform.position;
-                //    cameraPositionSameY.y = hit.Pose.position.y;
-
-                //    // Have Andy look toward the camera respecting his "up" perspective, which may be from ceiling.
-                //    farmObject.transform.LookAt(cameraPositionSameY, farmObject.transform.up);
-                //}
 
                 // Make Farm model a child of the anchor.
                 farmObject.transform.parent = anchor.transform;
 
                 farmCreated = true;
             }
+
+
 
             //Create ray and raycasthit for tile selection
             Ray ray = Camera.current.ScreenPointToRay(Input.GetTouch(0).position);
@@ -275,18 +292,141 @@ namespace GoogleARCore.FarmAR
                 mSelected.color = Color.yellow;
             }
 
+            try
+            {
+                CheckWaterLevel();
+                _ShowAndroidToastMessage("Check Water OK!");
+            }
+            catch (Exception e)
+            {
+                //_ShowAndroidToastMessage("Water code crashed");
+            }
+            try
+            {
+                CheckPlantStage();
+                _ShowAndroidToastMessage("Check Plant OK!");
+            }
+            catch (Exception e)
+            {
+                //_ShowAndroidToastMessage("Check plant crashed");
+            }
+
             if (TileUI.activeSelf)
             {
+
                 Button[] buttonList = TileUI.GetComponentsInChildren<Button>();
-                Button harvesttButton = buttonList[0];
+                Button harvestButton = buttonList[0];
                 Button waterButton = buttonList[1];
                 Button plantButton = buttonList[2];
-                String prefabToSwap = "Flowers";
 
-                plantButton.onClick.AddListener(() => { Swap(selectedTile, prefabToSwap); });
+                StorageInventory storage = plantButton.GetComponent<StorageInventory>();
 
+
+
+                plantButton.onClick.AddListener(() =>
+                {
+
+                    //                    Plant(selectedTile, -1);
+                    storage.OpenInventory();
+
+
+                });
+                waterButton.onClick.AddListener(() =>
+                {
+                    TileState oldState = selectedTile.GetComponent<TileState>();
+                    TileState copy = null;
+                    GetCopyOf(oldState, copy, oldState.GetType());
+                    DestroyImmediate(oldState);
+                    TileState newState = selectedTile.AddComponent<TileState>();
+                    GetCopyOf(copy, newState, copy.GetType());
+                    newState.Water();
+                });
+                harvestButton.onClick.AddListener(() => { Harvest(selectedTile); });
+
+
+                if (InventoryUI.activeSelf)
+                {
+                    Button[] seedButtons = InventoryUI.GetComponentsInChildren<Button>();
+                    int i = 0;
+
+
+                    seedButtons[0].onClick.AddListener(() =>
+                     {
+                         try
+                        {
+                            _ShowAndroidToastMessage("Selected item at " + 0);
+                            Plant(selectedTile, 0);
+                            storage.OpenInventory();
+                        }
+                        catch (Exception e)
+                        {
+                            _ShowAndroidToastMessage("Inventory Button listener crashed");
+                        }
+                     });
+
+                    seedButtons[1].onClick.AddListener(() =>
+                    {
+                        try
+                        {
+                            _ShowAndroidToastMessage("Selected item at " + 1);
+                            Plant(selectedTile, 1);
+                            storage.OpenInventory();
+                        }
+                        catch (Exception e)
+                        {
+                            _ShowAndroidToastMessage("Inventory Button listener crashed");
+                        }
+                    });
+
+                    seedButtons[2].onClick.AddListener(() =>
+                    {
+                        try
+                        {
+                            _ShowAndroidToastMessage("Selected item at " + 2);
+                            Plant(selectedTile, 2);
+                            storage.OpenInventory();
+                        }
+                        catch (Exception e)
+                        {
+                            _ShowAndroidToastMessage("Inventory Button listener crashed");
+                        }
+                    });
+
+                    seedButtons[3].onClick.AddListener(() =>
+                    {
+                        try
+                        {
+                            _ShowAndroidToastMessage("Selected item at " + 3);
+                            Plant(selectedTile, 3);
+                            storage.OpenInventory();
+                        }
+                        catch (Exception e)
+                        {
+                            _ShowAndroidToastMessage("Inventory Button listener crashed");
+                        }
+                    });
+                }
 
             }
+
+
+
+            if (EscapeUI.activeSelf)
+            {
+                Button[] buttonList = EscapeUI.GetComponentsInChildren<Button>();
+                Button escapeButton = buttonList[0];
+
+                escapeButton.onClick.AddListener(() =>
+                {
+                    mSelected.color = mOriginal.color;
+                    selectedTile = null;
+                });
+            }
+
+
+
+
+
 
 
 
@@ -313,9 +453,214 @@ namespace GoogleARCore.FarmAR
             //    }
         }
 
+        //puts a new plant in the passed in tile
+        //displays toast message if there is already a plant
+        //
+        //still needs inventory UI implementation
+        public void Plant(GameObject tile, int plantID)
+        {
+            currency = 999;
+            if (!tile.GetComponent<TileState>().HasPlant)
+            {
+                if (currency >= seedValues[plantID])
+                {
+                    currency -= seedValues[plantID];
+                    Swap(tile, 4, plantID, 1);
+                }
+                else
+                {
+                    _ShowAndroidToastMessage("Not enough currency yo. Have " + currency + ", need " + seedValues[plantID]);
+                }
+
+            }
+        }
+
+        //removes plant from passed in tile
+        //displays toast message if there is no plant in the tile
+        public void Harvest(GameObject tile)
+        {
+            if (tile.GetComponent<TileState>().HasPlant)
+            {
+                Swap(tile, 5, -1, 2);
+                currency += plantValues[tile.GetComponent<TileState>().PlantType];
+            }
+        }
+
+        /// <summary>
+        /// Swaps prefabs for game object
+        ///
+        /// action to take: 1-> put in new plant
+        ///                 2-> harvest plant
+        ///                 3-> grow new plant
+        ///                 4-> wither plant
+        /// </summary>
+        public void Swap(GameObject tile, int plantModel, int plantType, int action)
+        {
+            string value;
+
+            if (tileModels.TryGetValue(plantModel, out value))
+            {
+                //make new tile, copy components of old tile
+                GameObject newTile = (GameObject)Instantiate(Resources.Load(value));
+
+                //copy box collider
+                newTile.AddComponent<BoxCollider>();
+                GetCopyOf(tile.GetComponent<BoxCollider>(), newTile.GetComponent<BoxCollider>(), tile.GetComponent<BoxCollider>().GetType());
+                newTile.GetComponent<BoxCollider>().size = tile.GetComponent<BoxCollider>().size;
+                newTile.GetComponent<BoxCollider>().center = tile.GetComponent<BoxCollider>().center;
+
+                //copy mesh renderer and destory the old one
+                MeshRenderer m = newTile.AddComponent<MeshRenderer>() as MeshRenderer;
+                GetCopyOf(tile.GetComponent<MeshRenderer>(), m, tile.GetComponent<MeshRenderer>().GetType());
+                DestroyImmediate(tile.GetComponent<MeshRenderer>());
+
+                TileState newTileState = newTile.AddComponent<TileState>();
+
+                switch (action)
+                {
+                    //put new plant
+                    case 1:
+                        newTileState.PutPlant(plantType, value);
+                        break;
+                    //harvest plant
+                    case 2:
+                        newTileState.Harvest(value);
+                        break;
+                    //growth
+                    case 3:
+                        GetCopyOf(tile.GetComponent<TileState>(), newTileState, newTileState.GetType());
+                        newTileState.PlantModel = value;
+                        break;
+                    //wither
+                    case 4:
+                        newTileState.PlantModel = value;
+                        newTileState.IsWatered = false;
+                        newTileState.WateredLast = tile.GetComponent<TileState>().WateredLast;
+                        break;
+                    default:
+                        break;
+                }
+
+                newTile.transform.parent = tile.transform.parent;
+                newTile.transform.localPosition = tile.transform.localPosition;
+                newTile.transform.localRotation = tile.transform.localRotation;
+                newTile.transform.localScale = tile.transform.localScale;
+                DestroyImmediate(tile);
+                tile = newTile;
 
 
 
+            }
+
+        }
+
+        private static void GetCopyOf(Component comp, Component newComp, Type other)
+        {
+            Type type = comp.GetType();
+            if (type != other.GetType()) return; // type mis-match
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
+            PropertyInfo[] pinfos = type.GetProperties(flags);
+            foreach (var pinfo in pinfos)
+            {
+                if (pinfo.CanWrite)
+                {
+                    try
+                    {
+                        pinfo.SetValue(comp, pinfo.GetValue(other, null), null);
+                    }
+                    catch
+                    {
+                        _ShowAndroidToastMessage("bad copy, yo");
+                    } // In case of NotImplementedException being thrown. For some reason specifying that exception didn't seem to catch it, so I didn't catch anything specific.
+                }
+            }
+            FieldInfo[] finfos = type.GetFields(flags);
+            foreach (var finfo in finfos)
+            {
+                finfo.SetValue(comp, finfo.GetValue(other));
+            }
+            newComp = comp;
+        }
+
+        private void CheckWaterLevel()
+        {
+            //search for objects that are watered but still have withered prefab
+            _ShowAndroidToastMessage("Entered CheckWaterLevel()");
+            //activeTiles = GameObject.FindGameObjectsWithTag("Tile");
+            _ShowAndroidToastMessage("activeTiles size = " + activeTiles.Length);
+            foreach (GameObject other in activeTiles)
+            {
+                if ((!other.GetComponent<TileState>().IsWatered) && other.GetComponent<TileState>().HasPlant &&
+                    (!other.GetComponent<TileState>().PlantModel.Equals("model 6")))
+                {
+                    Swap(other, 6, 6, 4);
+                }
+            }
+
+        }
+
+        private void CheckPlantStage()
+        {
+            //activeTiles = GameObject.FindGameObjectsWithTag("Tile");
+            foreach (GameObject tile in activeTiles)
+            {
+                if (tile.GetComponent<TileState>().HasPlant)
+                {
+                    int plantType = tile.GetComponent<TileState>().PlantType;
+                    string plantModel = tile.GetComponent<TileState>().PlantModel;
+                    int plantStage = tile.GetComponent<TileState>().PlantStage;
+                    if (plantStage == 2 && plantModel.Equals(modelPath + "model 7"))
+                    {
+                        Swap(tile, plantType, plantType, 3);
+                    }
+                    else if (plantStage == 1 && plantModel.Equals(modelPath + "model 4"))
+                    {
+                        Swap(tile, 7, plantType, 3);
+                    }
+                }
+            }
+        }
+
+
+        public void OnPickedSeed(Item item)
+        {
+            // item unique ID can be referenced by item.itemID
+            _ShowAndroidToastMessage("Picked " + item.itemName);
+        }
+
+        public void ReloadFarm(bool farmSaved)
+        {
+            if (farmSaved)
+            {
+                foreach (GameObject tile in activeTiles)
+                {
+                    Swap(tile, PlayerPrefs.GetInt(tile.name + "pModel"), PlayerPrefs.GetInt(tile.name + "pType"), 1);
+                    DestroyImmediate(tile.GetComponent<TileState>());
+                    TileState state = tile.AddComponent<TileState>();
+                    state.PlantStage = PlayerPrefs.GetInt(tile.name + "pStage");
+                    state.PlantType = PlayerPrefs.GetInt(tile.name + "pType");
+                    state.PlantModel = PlayerPrefs.GetString(tile.name + "pModel");
+                    if (PlayerPrefs.GetInt(tile.name + "isWatered") == 1)
+                    {
+                        state.IsWatered = true;
+                    }
+                    else
+                    {
+                        state.IsWatered = false;
+                    }
+                    if (PlayerPrefs.GetInt(tile.name + "hasPlant") == 1)
+                    {
+                        state.HasPlant = true;
+                    }
+                    else
+                    {
+                        state.HasPlant = false;
+                    }
+                    state.WateredLast = DateTime.Parse(PlayerPrefs.GetString(tile.name + "wateredLast"));
+                    state.PlantedLast = DateTime.Parse(PlayerPrefs.GetString(tile.name + "plantedLast"));
+                }
+            }
+        }
         /// <summary>
         /// Quit the application if there was a connection error for the ARCore session.
         /// </summary>
@@ -349,11 +694,40 @@ namespace GoogleARCore.FarmAR
             Application.Quit();
         }
 
+        void OnApplicationPause()
+        {
+            foreach (GameObject tile in activeTiles)
+            {
+                PlayerPrefs.SetInt(tile.name + "pStage", tile.GetComponent<TileState>().PlantStage);
+                PlayerPrefs.SetInt(tile.name + "pType", tile.GetComponent<TileState>().PlantType);
+                PlayerPrefs.SetString(tile.name + "pModel", tile.GetComponent<TileState>().PlantModel);
+                if (tile.GetComponent<TileState>().IsWatered)
+                {
+                    PlayerPrefs.SetInt(tile.name + "isWatered", 1);
+                }
+                else
+                {
+                    PlayerPrefs.SetInt(tile.name + "isWatered", 0);
+                }
+                if (tile.GetComponent<TileState>().HasPlant)
+                {
+                    PlayerPrefs.SetInt(tile.name + "hasPlant", 1);
+                }
+                else
+                {
+                    PlayerPrefs.SetInt(tile.name + "hasPlant", 0);
+                }
+                PlayerPrefs.SetString(tile.name + "wateredLast", tile.GetComponent<TileState>().WateredLast.ToString());
+                PlayerPrefs.SetString(tile.name + "plantedlast", tile.GetComponent<TileState>().PlantedLast.ToString());
+                PlayerPrefs.SetInt("farmSaved", 1);
+            }
+        }
+
         /// <summary>
         /// Show an Android toast message.
         /// </summary>
         /// <param name="message">Message string to show in the toast.</param>
-        private void _ShowAndroidToastMessage(string message)
+        private static void _ShowAndroidToastMessage(string message)
         {
             AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
             AndroidJavaObject unityActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");

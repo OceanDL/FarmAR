@@ -3,9 +3,13 @@ using System.Collections;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+
 using System.Collections.Generic;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+
+using GoogleARCore.FarmAR;
+using GoogleARCore;
 
 public class StorageInventory : MonoBehaviour
 {
@@ -33,13 +37,14 @@ public class StorageInventory : MonoBehaviour
     public int itemAmount;
 
     Tooltip tooltip;
-    Inventory inv;
+    public Inventory inv;
 
     GameObject player;
 
     static Image timerImage;
     static GameObject timer;
 
+    bool openInv;
     bool closeInv;
 
     bool showStorage;
@@ -53,6 +58,7 @@ public class StorageInventory : MonoBehaviour
 
     void Start()
     {
+        //_ShowAndroidToastMessage("Made inventory");
         if (inputManagerDatabase == null)
             inputManagerDatabase = (InputManager)Resources.Load("InputManager");
 
@@ -96,10 +102,11 @@ public class StorageInventory : MonoBehaviour
             itemDatabase = (ItemDataBaseList)Resources.Load("ItemDatabase");
     }
 
-    void Update()
+    void LateUpdate()
     {
+        //_ShowAndroidToastMessage("In inventory");
 
-        float distance = Vector3.Distance(this.gameObject.transform.position, player.transform.position);
+        float distance = 0;
 
         if (showTimer)
         {
@@ -111,10 +118,11 @@ public class StorageInventory : MonoBehaviour
             }
         }
 
-        if (distance <= distanceToOpenStorage && Input.GetKeyDown(inputManagerDatabase.StorageKeyCode))
+        if (openInv)
         {
             showStorage = !showStorage;
             StartCoroutine(OpenInventoryWithTimer());
+            openInv = false;
         }
 
         if (distance > distanceToOpenStorage && showStorage)
@@ -132,6 +140,11 @@ public class StorageInventory : MonoBehaviour
             timer.SetActive(false);
             showTimer = false;
         }
+    }
+
+    public void OpenInventory()
+    {
+        openInv = true;
     }
 
     IEnumerator OpenInventoryWithTimer()
@@ -160,7 +173,6 @@ public class StorageInventory : MonoBehaviour
             tooltip.deactivateTooltip();
         }
 
-
     }
 
 
@@ -180,10 +192,6 @@ public class StorageInventory : MonoBehaviour
         }
         iV.stackableSettings();
     }
-
-
-
-
 
 
 }
